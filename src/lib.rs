@@ -31,6 +31,10 @@ const fn bit_index(index: usize) -> usize {
 const fn align_count(bit_index: usize) -> usize {
     bit_index.div_ceil(SIZE_IN_BITS)
 }
+#[inline]
+const fn storage_range(range: std::ops::Range<usize>) -> std::ops::Range<usize> {
+    block_index(range.start)..align_count(range.end)
+}
 
 impl BitVec {
     pub fn new(size: usize, value: bool) -> Self {
@@ -74,12 +78,18 @@ impl BitVec {
         self.len -= range.len();
     }
 
-    pub fn as_slice(&self) -> Slice<'_> {
-        Slice::new(&self.storage, self.len)
+    pub fn as_slice(&self) -> Slice {
+        Slice {
+            storage: &self.storage,
+            range: 0..self.len,
+        }
     }
 
-    pub fn as_mut_slice(&mut self) -> SliceMut<'_> {
-        SliceMut::new(&mut self.storage, &mut self.len)
+    pub fn as_mut_slice(&mut self) -> SliceMut {
+        SliceMut {
+            storage: &mut self.storage,
+            range: 0..self.len,
+        }
     }
 
     pub fn iter(&self) -> Iter<'_> {
@@ -157,7 +167,7 @@ impl From<&[bool]> for BitVec {
     }
 }
 
-impl_index!(BitVec, |bits: &BitVec| bits.len);
+impl_index!(BitVec);
 
 #[cfg(test)]
 mod tests {
@@ -219,6 +229,48 @@ mod tests {
             bits.as_slice().iter().collect::<Vec<_>>(),
             vec![false, false, true, true, true, true, false, false]
         );
+    }
+
+    #[test]
+    fn slice_range() {
+        let mut booleans = vec![false; 70];
+        booleans[29] = true;
+        booleans[32] = true;
+        booleans[34] = true;
+
+        let bits = BitVec::from(booleans.as_slice());
+        let slice = bits.as_slice().slice(30..35);
+
+        assert_eq!(slice.words().len(), 2);
+        assert_eq!(
+            slice.iter().collect::<Vec<_>>(),
+            vec![false, false, true, false, true]
+        );
+    }
+
+    #[test]
+    fn slice_range_can_be_sliced_again() {
+        let booleans = [
+            false, true, false, true, true, false, true, false, true, false,
+        ];
+        let bits = BitVec::from(booleans.as_slice());
+
+        let slice = bits.as_slice().slice(1..9).slice(2..7);
+        assert_eq!(slice.iter().collect::<Vec<_>>(), booleans[3..8]);
+    }
+
+    #[test]
+    fn slice_mut_range() {
+        let mut bits = BitVec::new(70, false);
+        {
+            let mut slice = bits.as_mut_slice().slice(30..35);
+            slice.set(2);
+            slice.set(4);
+        }
+        assert!(bits[32]);
+        assert!(bits[34]);
+        assert!(!bits[31]);
+        assert!(!bits[33]);
     }
 
     #[test]

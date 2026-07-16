@@ -23,13 +23,13 @@ macro_rules! bit_unset {
 }
 
 macro_rules! impl_index {
-    ($ty:ty, $len:expr) => {
+    ($ty:ty) => {
         impl ::std::ops::Index<usize> for $ty {
             type Output = bool;
 
             #[inline]
             fn index(&self, index: usize) -> &Self::Output {
-                assert!(index < ($len)(self));
+                assert!(index < self.len());
                 let value = bit_get!(self.storage, index);
                 if value { &true } else { &false }
             }

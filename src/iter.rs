@@ -2,14 +2,8 @@ use crate::Slice;
 
 #[derive(Debug, Clone)]
 pub struct Iter<'a> {
-    slice: Slice<'a>,
-    index: usize,
-}
-
-impl<'a> Iter<'a> {
-    pub(crate) fn new(slice: Slice<'a>) -> Self {
-        Self { slice, index: 0 }
-    }
+    pub(crate) slice: Slice<'a>,
+    pub(crate) index: usize,
 }
 
 impl Iterator for Iter<'_> {

@@ -1,49 +1,53 @@
-use crate::Iter;
+use crate::{Iter, bit_index, storage_range};
+use std::ops::Range;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct Slice<'a> {
-    storage: &'a [u32],
-    len: usize,
-}
-
-#[derive(Debug)]
-pub struct SliceMut<'a> {
-    storage: &'a mut [u32],
-    len: &'a mut usize,
+    pub(crate) storage: &'a [u32],
+    pub(crate) range: Range<usize>,
 }
 
 impl<'a> Slice<'a> {
-    pub(crate) fn new(storage: &'a [u32], len: usize) -> Self {
-        Self { storage, len }
-    }
-
-    #[inline]
-    pub fn get_unsafe(&self, index: usize) -> bool {
-        bit_get!(self.storage, index)
+    pub fn slice(&self, range: Range<usize>) -> Self {
+        let start = self.range.start + range.start;
+        let end = self.range.start + range.end;
+        Self {
+            storage: &self.storage[storage_range(start..end)],
+            range: bit_index(start)..range.end,
+        }
     }
     #[inline]
     pub fn get(&self, index: usize) -> Option<bool> {
-        if index < self.len {
-            Some(self.get_unsafe(index))
+        if index < self.len() {
+            Some(bit_get!(self.storage, self.range.start + index))
         } else {
             None
         }
     }
-
+    #[inline]
     pub fn len(&self) -> usize {
-        self.len
+        self.range.len()
     }
-
+    #[inline]
+    pub fn words(&self) -> &'a [u32] {
+        self.storage
+    }
+    #[inline]
     pub fn iter(&self) -> Iter<'a> {
-        Iter::new(*self)
+        Iter {
+            slice: self.slice(0..self.len()),
+            index: 0,
+        }
     }
 }
 
-impl<'a> SliceMut<'a> {
-    pub(crate) fn new(storage: &'a mut [u32], len: &'a mut usize) -> Self {
-        Self { storage, len }
-    }
+#[derive(Debug)]
+pub struct SliceMut<'a> {
+    pub(crate) storage: &'a mut [u32],
+    pub(crate) range: std::ops::Range<usize>,
+}
 
+impl<'a> SliceMut<'a> {
     pub fn unset_all(&mut self) {
         self.storage.fill(0);
     }
@@ -61,6 +65,7 @@ impl<'a> SliceMut<'a> {
 
     #[inline]
     pub fn set_value(&mut self, index: usize, value: bool) {
+        let index = self.relative_index(index);
         if value {
             bit_set!(self.storage, index);
         } else {
@@ -70,36 +75,44 @@ impl<'a> SliceMut<'a> {
 
     #[inline]
     pub fn set(&mut self, index: usize) {
+        let index = self.relative_index(index);
         bit_set!(self.storage, index);
     }
 
     #[inline]
     pub fn unset(&mut self, index: usize) {
+        let index = self.relative_index(index);
         bit_unset!(self.storage, index);
     }
 
-    #[inline]
-    pub fn get_unsafe(&self, index: usize) -> bool {
-        bit_get!(self.storage, index)
+    pub fn slice(self, range: Range<usize>) -> Self {
+        let start = self.range.start + range.start;
+        let end = self.range.start + range.end;
+        Self {
+            storage: &mut self.storage[storage_range(start..end)],
+            range: bit_index(start)..range.end,
+        }
     }
 
     #[inline]
     pub fn get(&self, index: usize) -> Option<bool> {
-        if index < *self.len {
-            Some(self.get_unsafe(index))
-        } else {
-            None
+        if index >= self.len() {
+            return None;
         }
+        let index = self.relative_index(index);
+        Some(bit_get!(self.storage, index))
     }
 
+    #[inline]
     pub fn len(&self) -> usize {
-        *self.len
+        self.range.len()
     }
 
-    pub fn iter(&self) -> Iter<'_> {
-        Iter::new(Slice::new(self.storage, *self.len))
+    #[inline]
+    fn relative_index(&self, index: usize) -> usize {
+        self.range.start + index
     }
 }
 
-impl_index!(Slice<'_>, |slice: &Slice<'_>| slice.len);
-impl_index!(SliceMut<'_>, |slice: &SliceMut<'_>| *slice.len);
+impl_index!(Slice<'_>);
+impl_index!(SliceMut<'_>);
