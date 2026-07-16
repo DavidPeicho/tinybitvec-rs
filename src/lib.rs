@@ -1,8 +1,35 @@
-use std::num::NonZero;
+macro_rules! bit_get {
+    ($storage:expr, $index:expr) => {{
+        let block = $crate::align_index($index);
+        let bit = $crate::bit_index($index);
+        $storage[block] & (1 << bit) != 0
+    }};
+}
 
-#[cfg(feature = "rkyv")]
-mod rkyv;
+macro_rules! bit_set {
+    ($storage:expr, $index:expr) => {{
+        let block = $crate::align_index($index);
+        let bit = $crate::bit_index($index);
+        $storage[block] = $storage[block] | (1 << bit);
+    }};
+}
 
+macro_rules! bit_unset {
+    ($storage:expr, $index:expr) => {{
+        let block = $crate::align_index($index);
+        let bit = $crate::bit_index($index);
+        $storage[block] = $storage[block] & !(1 << bit);
+    }};
+}
+
+mod slice;
+
+pub use slice::{Slice, SliceMut};
+
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 #[derive(Debug, Default)]
 pub struct BitVec {
     storage: Vec<u32>,
@@ -28,16 +55,9 @@ fn align_count(bit_index: usize) -> usize {
 impl BitVec {
     pub const ELEMENTS_PER_WORD: usize = SIZE_IN_BITS;
 
-    pub fn empty() -> Self {
-        Self {
-            storage: Vec::new(),
-            len: 0,
-        }
-    }
-
-    pub fn new(size: NonZero<usize>) -> Self {
-        let mut bits = Self::empty();
-        bits.grow(size.get());
+    pub fn new(size: usize) -> Self {
+        let mut bits = Self::default();
+        bits.grow(size);
         bits
     }
 
@@ -45,25 +65,33 @@ impl BitVec {
         let value = if value { u32::MAX } else { 0 };
         let len = align_count(size);
 
-        let mut bits = Self::empty();
+        let mut bits = Self::default();
         bits.storage.resize(len, value);
         bits.len += size;
         bits
     }
 
+    pub fn as_slice(&self) -> Slice<'_> {
+        Slice::new(&self.storage, self.len)
+    }
+
+    pub fn as_mut_slice(&mut self) -> SliceMut<'_> {
+        SliceMut::new(&mut self.storage, &mut self.len)
+    }
+
     pub fn unset_all(&mut self) {
-        self.storage.fill(0);
+        self.as_mut_slice().unset_all();
     }
 
     pub fn set_all(&mut self) {
-        self.storage.fill(1);
+        self.as_mut_slice().set_all();
     }
 
     pub fn from_bools(booleans: &[bool]) -> Self {
         if booleans.len() == 0 {
-            return Self::empty();
+            return Self::default();
         }
-        let mut bits = BitVec::new(NonZero::new(booleans.len()).unwrap());
+        let mut bits = BitVec::new(booleans.len());
         for i in 0..booleans.len() {
             bits.set_value(i, booleans[i]);
         }
@@ -72,17 +100,17 @@ impl BitVec {
 
     pub fn push(&mut self, value: bool) {
         if self.capacity() == 0 {
-            self.grow(1);
+            self.storage.resize(self.storage.len() + 1, 0);
         }
         self.set_value(self.len, value);
         self.len += 1;
     }
 
     pub fn set_range(&mut self, range: std::ops::Range<usize>) {
-        // TODO: Could be optimized based on alignment
-        for i in range {
-            self.set(i);
+        if range.end > self.len {
+            self.grow(range.end - self.len);
         }
+        self.as_mut_slice().set_range(range);
     }
 
     pub fn grow(&mut self, extra_capacity: usize) {
@@ -92,45 +120,32 @@ impl BitVec {
     }
 
     pub fn drain(&mut self, range: std::ops::Range<usize>) {
-        for src in range.end..self.len {
-            let dst = range.start + (src - range.end);
-            let value = self.get_unsafe(src);
-            self.set_value(dst, value);
-        }
-        self.len -= range.len();
+        self.as_mut_slice().drain(range);
     }
 
     #[inline]
     pub fn set_value(&mut self, index: usize, value: bool) {
         if value {
-            self.set(index);
+            bit_set!(self.storage, index);
         } else {
-            self.unset(index);
+            bit_unset!(self.storage, index);
         }
     }
 
     #[inline]
     pub fn set(&mut self, index: usize) {
-        let block = align_index(index);
-        let bit = bit_index(index);
-        self.storage[block] = self.storage[block] | (1 << bit);
+        bit_set!(self.storage, index);
     }
 
     #[inline]
     pub fn unset(&mut self, index: usize) {
-        let block = align_index(index);
-        let bit = bit_index(index);
-        self.storage[block] = self.storage[block] & !(1 << bit);
+        bit_unset!(self.storage, index);
     }
 
-    // TODO: Should be on a slice type
     #[inline]
     pub fn get_unsafe(&self, index: usize) -> bool {
-        let block = align_index(index);
-        let bit = bit_index(index);
-        self.storage[block] & (1 << bit) != 0
+        bit_get!(self.storage, index)
     }
-
     #[inline]
     pub fn get(&self, index: usize) -> Option<bool> {
         if index < self.len {
@@ -140,15 +155,18 @@ impl BitVec {
         }
     }
 
+    #[inline]
     pub fn len(&self) -> usize {
         self.len
     }
 
+    #[inline]
     pub fn words(&self) -> &[u32] {
         &self.storage
     }
 
-    fn capacity(&self) -> usize {
+    #[inline]
+    pub(crate) fn capacity(&self) -> usize {
         let bits = self.storage.len() * SIZE_IN_BITS;
         assert!(bits >= self.len);
         bits - self.len
@@ -158,6 +176,123 @@ impl BitVec {
 #[cfg(test)]
 mod tests {
     use crate::BitVec;
+
+    #[test]
+    fn new() {
+        let bits = BitVec::new(33);
+        assert_eq!(bits.len(), 33);
+        assert_eq!(bits.words().len(), 2);
+    }
+
+    #[test]
+    fn new_with_value() {
+        let ones = BitVec::new_with_value(33, true);
+        assert_eq!(ones.len(), 33);
+        assert_eq!(ones.words().len(), 2);
+        for i in 0..ones.len() {
+            assert_eq!(ones.get(i), Some(true), "bit {}", i);
+        }
+
+        let zeros = BitVec::new_with_value(33, false);
+        assert_eq!(zeros.len(), 33);
+        assert_eq!(zeros.words().len(), 2);
+        for i in 0..zeros.len() {
+            assert_eq!(zeros.get(i), Some(false), "bit {}", i);
+        }
+    }
+
+    #[test]
+    fn unset_all() {
+        let mut bits = BitVec::new_with_value(40, true);
+        bits.unset_all();
+        for i in 0..bits.len() {
+            assert_eq!(bits.get(i), Some(false), "bit {}", i);
+        }
+    }
+
+    #[test]
+    fn set_all() {
+        let mut bits = BitVec::new_with_value(40, false);
+
+        bits.set_all();
+        for i in 0..bits.len() {
+            assert_eq!(bits.get(i), Some(true), "bit {}", i);
+        }
+    }
+
+    #[test]
+    fn push() {
+        let mut bits = BitVec::default();
+        bits.push(true);
+        bits.push(false);
+        bits.push(true);
+
+        let mut expected = vec![true, false, true];
+
+        assert_eq!(bits.len(), 3);
+        assert_eq!(bits.get(0), Some(expected[0]));
+        assert_eq!(bits.get(1), Some(expected[1]));
+        assert_eq!(bits.get(2), Some(expected[2]));
+        assert_eq!(bits.get(3), None);
+
+        // Push beyond first word
+        for i in 0..64 {
+            let value = i % 2 == 0;
+            expected.push(value);
+            bits.push(value);
+        }
+
+        // TODO: collect
+    }
+
+    #[test]
+    fn set_range() {
+        let mut bits = BitVec::new(8);
+        bits.set_range(2..6);
+
+        for i in 0..2 {
+            assert_eq!(bits.get(i), Some(false), "bit {}", i);
+        }
+        for i in 2..6 {
+            assert_eq!(bits.get(i), Some(true), "bit {}", i);
+        }
+        for i in 6..8 {
+            assert_eq!(bits.get(i), Some(false), "bit {}", i);
+        }
+    }
+
+    #[test]
+    fn grow() {
+        let mut bits = BitVec::from_bools(&[true, false]);
+
+        bits.grow(31);
+
+        assert_eq!(bits.len(), 33);
+        assert_eq!(bits.words().len(), 2);
+        assert_eq!(bits.get(0), Some(true));
+        assert_eq!(bits.get(1), Some(false));
+        for i in 2..bits.len() {
+            assert_eq!(bits.get(i), Some(false), "bit {}", i);
+        }
+    }
+
+    #[test]
+    fn unset() {
+        let mut bits = BitVec::new_with_value(4, true);
+
+        bits.unset(2);
+
+        assert_eq!(bits.get(0), Some(true));
+        assert_eq!(bits.get(1), Some(true));
+        assert_eq!(bits.get(2), Some(false));
+        assert_eq!(bits.get(3), Some(true));
+    }
+
+    #[test]
+    fn capacity() {
+        let bits = BitVec::new(33);
+        assert_eq!(bits.capacity(), 31);
+    }
 
     #[test]
     fn get_set() {
