@@ -1,3 +1,4 @@
+#[doc = include_str!("../README.md")]
 mod iter;
 #[macro_use]
 mod macros;
@@ -292,11 +293,15 @@ mod tests {
         assert!(!bits[31]);
         assert!(!bits[33]);
 
-        let mut bits = BitVec::new(4, false);
-
         // `set_all` shouldn't set values outside of range
+        let mut bits = BitVec::new(4, false);
         bits.as_mut_slice().slice(1..2).set_all();
         assert_eq!(bits.iter().collect::<Vec<_>>(), [false, true, false, false]);
+
+        // Same for `unset_all`
+        let mut bits = BitVec::new(4, true);
+        bits.as_mut_slice().slice(1..2).unset_all();
+        assert_eq!(bits.iter().collect::<Vec<_>>(), [true, false, true, true]);
     }
 
     #[test]

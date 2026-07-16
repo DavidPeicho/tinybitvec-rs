@@ -30,7 +30,11 @@ macro_rules! impl_index {
             #[inline]
             fn index(&self, index: usize) -> &Self::Output {
                 let value = self.get(index).unwrap();
-                if value { &true } else { &false }
+                if value {
+                    &true
+                } else {
+                    &false
+                }
             }
         }
     };

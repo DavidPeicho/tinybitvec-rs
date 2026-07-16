@@ -1,4 +1,4 @@
-use crate::{bit_index, slice::storage_range};
+use crate::{SIZE_IN_BITS, bit_index, slice::storage_range};
 use std::ops::Range;
 
 #[derive(Debug)]
@@ -13,26 +13,19 @@ impl<'a> SliceMut<'a> {
     ///
     /// Panics if `range` reaches outside allocated storage.
     pub fn set_range(&mut self, range: std::ops::Range<usize>) {
-        // TODO: Could be optimized based on alignment
-        for i in range {
-            self.set(i);
-        }
+        self.set_range_to(range, true);
     }
 
-    /// Clears all backing words spanned by this slice.
-    ///
-    /// May clear bits outside this slice in the first or last word.
+    /// Clears all bits in this slice.
     #[inline]
     pub fn unset_all(&mut self) {
-        self.storage.fill(0);
+        self.set_range_to(0..self.len(), false);
     }
 
-    /// Sets all backing words spanned by this slice.
-    ///
-    /// May set bits outside this slice in the first or last word.
+    /// Sets all bits in this slice.
     #[inline]
     pub fn set_all(&mut self) {
-        self.storage.fill(u32::MAX);
+        self.set_range_to(0..self.len(), true);
     }
 
     /// Sets `index` to `value`.
@@ -80,6 +73,29 @@ impl<'a> SliceMut<'a> {
     #[inline]
     fn relative_index(&self, index: usize) -> usize {
         self.range.start + index
+    }
+
+    fn set_range_to(&mut self, range: Range<usize>, value: bool) {
+        if range.is_empty() {
+            return;
+        }
+
+        let end = range.end;
+        let mut index = range.start;
+        while index < end && bit_index(self.relative_index(index)) != 0 {
+            self.set_value(index, value);
+            index += 1;
+        }
+
+        while index + SIZE_IN_BITS <= end {
+            let block = self.relative_index(index) / SIZE_IN_BITS;
+            self.storage[block] = if value { u32::MAX } else { 0 };
+            index += SIZE_IN_BITS;
+        }
+
+        for i in index..end {
+            self.set_value(i, value);
+        }
     }
 }
 
