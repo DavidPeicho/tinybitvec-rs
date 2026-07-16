@@ -1,4 +1,5 @@
-#[doc = include_str!("../README.md")]
+#![doc = include_str!("../README.md")]
+
 mod iter;
 #[macro_use]
 mod macros;
@@ -15,6 +16,21 @@ pub use slice_mut::*;
 )]
 #[derive(Debug, Default)]
 /// A compact vector of bits.
+///
+/// ## Example
+///
+/// ```rust
+/// let mut bits = BitVec::default();
+/// bits.push(true);
+/// println!("{:?}", bits[0]); // true
+///
+/// bits.grow(31);
+/// println!("{:?}", bits[31]); // false
+///
+/// bits.set(2);
+/// let slice_values = bits.as_slice().slice(1..3).collect::<Vec<bool>>();
+/// println!("{:?}", slice_values); // [true, false, true]
+/// ```
 pub struct BitVec {
     storage: Vec<u32>,
     len: usize,
