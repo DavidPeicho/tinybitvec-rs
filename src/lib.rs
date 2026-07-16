@@ -1,31 +1,7 @@
-macro_rules! bit_get {
-    ($storage:expr, $index:expr) => {{
-        let block = $crate::align_index($index);
-        let bit = $crate::bit_index($index);
-        $storage[block] & (1 << bit) != 0
-    }};
-}
-
-macro_rules! bit_set {
-    ($storage:expr, $index:expr) => {{
-        let block = $crate::align_index($index);
-        let bit = $crate::bit_index($index);
-        $storage[block] = $storage[block] | (1 << bit);
-    }};
-}
-
-macro_rules! bit_unset {
-    ($storage:expr, $index:expr) => {{
-        let block = $crate::align_index($index);
-        let bit = $crate::bit_index($index);
-        $storage[block] = $storage[block] & !(1 << bit);
-    }};
-}
-
 mod iter;
+#[macro_use]
+mod macros;
 mod slice;
-
-use std::ops::Index;
 
 pub use iter::Iter;
 pub use slice::{Slice, SliceMut};
@@ -44,7 +20,7 @@ const SIZE_IN_BYTES: usize = std::mem::size_of::<u32>();
 const SIZE_IN_BITS: usize = 8 * SIZE_IN_BYTES;
 
 #[inline]
-fn align_index(bit_index: usize) -> usize {
+fn block_index(bit_index: usize) -> usize {
     bit_index / SIZE_IN_BITS
 }
 #[inline]
@@ -75,6 +51,29 @@ impl BitVec {
         bits
     }
 
+    pub fn grow(&mut self, extra_capacity: usize) {
+        let len = align_count(extra_capacity);
+        self.storage.resize(self.storage.len() + len, 0);
+        self.len += extra_capacity;
+    }
+
+    pub fn push(&mut self, value: bool) {
+        if self.capacity() == 0 {
+            self.storage.resize(self.storage.len() + 1, 0);
+        }
+        self.set_value(self.len, value);
+        self.len += 1;
+    }
+
+    pub fn drain(&mut self, range: std::ops::Range<usize>) {
+        for src in range.end..self.len {
+            let dst = range.start + (src - range.end);
+            let value = self.get_unsafe(src);
+            self.set_value(dst, value);
+        }
+        self.len -= range.len();
+    }
+
     pub fn as_slice(&self) -> Slice<'_> {
         Slice::new(&self.storage, self.len)
     }
@@ -95,29 +94,8 @@ impl BitVec {
         self.as_mut_slice().set_all();
     }
 
-    pub fn push(&mut self, value: bool) {
-        if self.capacity() == 0 {
-            self.storage.resize(self.storage.len() + 1, 0);
-        }
-        self.set_value(self.len, value);
-        self.len += 1;
-    }
-
     pub fn set_range(&mut self, range: std::ops::Range<usize>) {
-        if range.end > self.len {
-            self.grow(range.end - self.len);
-        }
         self.as_mut_slice().set_range(range);
-    }
-
-    pub fn grow(&mut self, extra_capacity: usize) {
-        let len = align_count(extra_capacity);
-        self.storage.resize(self.storage.len() + len, 0);
-        self.len += extra_capacity;
-    }
-
-    pub fn drain(&mut self, range: std::ops::Range<usize>) {
-        self.as_mut_slice().drain(range);
     }
 
     #[inline]
@@ -163,7 +141,7 @@ impl BitVec {
     }
 
     #[inline]
-    pub(crate) fn capacity(&self) -> usize {
+    fn capacity(&self) -> usize {
         let bits = self.storage.len() * SIZE_IN_BITS;
         assert!(bits >= self.len);
         bits - self.len
@@ -183,20 +161,7 @@ impl From<&[bool]> for BitVec {
     }
 }
 
-impl Index<usize> for BitVec {
-    type Output = bool;
-
-    #[inline]
-    fn index(&self, index: usize) -> &Self::Output {
-        assert!(index < self.len);
-        let value = self.get_unsafe(index);
-        if value {
-            &true
-        } else {
-            &false
-        }
-    }
-}
+impl_index!(BitVec, |bits: &BitVec| bits.len);
 
 #[cfg(test)]
 mod tests {
@@ -302,6 +267,7 @@ mod tests {
     fn capacity() {
         let bits = BitVec::new(33);
         assert_eq!(bits.capacity(), 31);
+        assert_eq!(bits.len(), 32);
     }
 
     #[test]

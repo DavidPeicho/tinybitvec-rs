@@ -3,13 +3,6 @@
 version = 4
 
 [[package]]
-name = "bitvec"
-version = "0.1.0"
-dependencies = [
- "rkyv",
-]
-
-[[package]]
 name = "bumpalo"
 version = "3.20.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -252,6 +245,13 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-ident",
+]
+
+[[package]]
+name = "tinybitvec"
+version = "0.1.0"
+dependencies = [
+ "rkyv",
 ]
 
 [[package]]

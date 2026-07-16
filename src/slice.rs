@@ -1,5 +1,3 @@
-use std::ops::Index;
-
 use crate::Iter;
 
 #[derive(Debug, Clone, Copy)]
@@ -61,15 +59,6 @@ impl<'a> SliceMut<'a> {
         }
     }
 
-    pub fn drain(&mut self, range: std::ops::Range<usize>) {
-        for src in range.end..*self.len {
-            let dst = range.start + (src - range.end);
-            let value = self.get_unsafe(src);
-            self.set_value(dst, value);
-        }
-        *self.len -= range.len();
-    }
-
     #[inline]
     pub fn set_value(&mut self, index: usize, value: bool) {
         if value {
@@ -112,32 +101,5 @@ impl<'a> SliceMut<'a> {
     }
 }
 
-impl Index<usize> for Slice<'_> {
-    type Output = bool;
-
-    #[inline]
-    fn index(&self, index: usize) -> &Self::Output {
-        assert!(index < self.len);
-        let value = self.get_unsafe(index);
-        if value {
-            &true
-        } else {
-            &false
-        }
-    }
-}
-
-impl Index<usize> for SliceMut<'_> {
-    type Output = bool;
-
-    #[inline]
-    fn index(&self, index: usize) -> &Self::Output {
-        assert!(index < *self.len);
-        let value = self.get_unsafe(index);
-        if value {
-            &true
-        } else {
-            &false
-        }
-    }
-}
+impl_index!(Slice<'_>, |slice: &Slice<'_>| slice.len);
+impl_index!(SliceMut<'_>, |slice: &SliceMut<'_>| *slice.len);
