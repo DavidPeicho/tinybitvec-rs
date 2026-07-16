@@ -30,8 +30,12 @@ macro_rules! impl_index {
             #[inline]
             fn index(&self, index: usize) -> &Self::Output {
                 assert!(index < self.len());
-                let value = bit_get!(self.storage, index);
-                if value { &true } else { &false }
+                let value = self.get(index).unwrap();
+                if value {
+                    &true
+                } else {
+                    &false
+                }
             }
         }
     };

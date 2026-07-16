@@ -1,4 +1,4 @@
-use crate::{Iter, bit_index, storage_range};
+use crate::{bit_index, storage_range, Iter};
 use std::ops::Range;
 
 #[derive(Debug, Clone)]
@@ -13,7 +13,7 @@ impl<'a> Slice<'a> {
         let end = self.range.start + range.end;
         Self {
             storage: &self.storage[storage_range(start..end)],
-            range: bit_index(start)..range.end,
+            range: bit_index(start)..(bit_index(start) + range.len()),
         }
     }
     #[inline]
@@ -90,7 +90,7 @@ impl<'a> SliceMut<'a> {
         let end = self.range.start + range.end;
         Self {
             storage: &mut self.storage[storage_range(start..end)],
-            range: bit_index(start)..range.end,
+            range: bit_index(start)..(bit_index(start) + range.len()),
         }
     }
 

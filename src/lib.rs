@@ -78,14 +78,14 @@ impl BitVec {
         self.len -= range.len();
     }
 
-    pub fn as_slice(&self) -> Slice {
+    pub fn as_slice(&self) -> Slice<'_> {
         Slice {
             storage: &self.storage,
             range: 0..self.len,
         }
     }
 
-    pub fn as_mut_slice(&mut self) -> SliceMut {
+    pub fn as_mut_slice(&mut self) -> SliceMut<'_> {
         SliceMut {
             storage: &mut self.storage,
             range: 0..self.len,
