@@ -1,5 +1,7 @@
 use std::ops::Index;
 
+use crate::Iter;
+
 #[derive(Debug, Clone, Copy)]
 pub struct Slice<'a> {
     storage: &'a [u32],
@@ -32,6 +34,10 @@ impl<'a> Slice<'a> {
 
     pub fn len(&self) -> usize {
         self.len
+    }
+
+    pub fn iter(&self) -> Iter<'a> {
+        Iter::new(*self)
     }
 }
 
@@ -99,6 +105,10 @@ impl<'a> SliceMut<'a> {
 
     pub fn len(&self) -> usize {
         *self.len
+    }
+
+    pub fn iter(&self) -> Iter<'_> {
+        Iter::new(Slice::new(self.storage, *self.len))
     }
 }
 

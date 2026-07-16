@@ -22,10 +22,12 @@ macro_rules! bit_unset {
     }};
 }
 
+mod iter;
 mod slice;
 
 use std::ops::Index;
 
+pub use iter::Iter;
 pub use slice::{Slice, SliceMut};
 
 #[cfg_attr(
@@ -79,6 +81,10 @@ impl BitVec {
 
     pub fn as_mut_slice(&mut self) -> SliceMut<'_> {
         SliceMut::new(&mut self.storage, &mut self.len)
+    }
+
+    pub fn iter(&self) -> Iter<'_> {
+        self.as_slice().iter()
     }
 
     pub fn unset_all(&mut self) {
@@ -184,7 +190,11 @@ impl Index<usize> for BitVec {
     fn index(&self, index: usize) -> &Self::Output {
         assert!(index < self.len);
         let value = self.get_unsafe(index);
-        if value { &true } else { &false }
+        if value {
+            &true
+        } else {
+            &false
+        }
     }
 }
 
@@ -204,25 +214,19 @@ mod tests {
         let ones = BitVec::new_with_value(33, true);
         assert_eq!(ones.len(), 33);
         assert_eq!(ones.words().len(), 2);
-        for i in 0..ones.len() {
-            assert_eq!(ones.get(i), Some(true), "bit {}", i);
-        }
+        assert_eq!(ones.as_slice().iter().collect::<Vec<_>>(), vec![true; 33]);
 
         let zeros = BitVec::new_with_value(33, false);
         assert_eq!(zeros.len(), 33);
         assert_eq!(zeros.words().len(), 2);
-        for i in 0..zeros.len() {
-            assert_eq!(zeros.get(i), Some(false), "bit {}", i);
-        }
+        assert_eq!(zeros.as_slice().iter().collect::<Vec<_>>(), vec![false; 33]);
     }
 
     #[test]
     fn unset_all() {
         let mut bits = BitVec::new_with_value(40, true);
         bits.unset_all();
-        for i in 0..bits.len() {
-            assert_eq!(bits.get(i), Some(false), "bit {}", i);
-        }
+        assert_eq!(bits.as_slice().iter().collect::<Vec<_>>(), vec![false; 40]);
     }
 
     #[test]
@@ -230,9 +234,7 @@ mod tests {
         let mut bits = BitVec::new_with_value(40, false);
 
         bits.set_all();
-        for i in 0..bits.len() {
-            assert_eq!(bits.get(i), Some(true), "bit {}", i);
-        }
+        assert_eq!(bits.as_slice().iter().collect::<Vec<_>>(), vec![true; 40]);
     }
 
     #[test]
@@ -257,7 +259,7 @@ mod tests {
             bits.push(value);
         }
 
-        // TODO: collect
+        assert_eq!(bits.as_slice().iter().collect::<Vec<_>>(), expected);
     }
 
     #[test]
@@ -265,15 +267,10 @@ mod tests {
         let mut bits = BitVec::new(8);
         bits.set_range(2..6);
 
-        for i in 0..2 {
-            assert_eq!(bits.get(i), Some(false), "bit {}", i);
-        }
-        for i in 2..6 {
-            assert_eq!(bits.get(i), Some(true), "bit {}", i);
-        }
-        for i in 6..8 {
-            assert_eq!(bits.get(i), Some(false), "bit {}", i);
-        }
+        assert_eq!(
+            bits.as_slice().iter().collect::<Vec<_>>(),
+            vec![false, false, true, true, true, true, false, false]
+        );
     }
 
     #[test]
@@ -284,11 +281,9 @@ mod tests {
 
         assert_eq!(bits.len(), 33);
         assert_eq!(bits.words().len(), 2);
-        assert_eq!(bits.get(0), Some(true));
-        assert_eq!(bits.get(1), Some(false));
-        for i in 2..bits.len() {
-            assert_eq!(bits.get(i), Some(false), "bit {}", i);
-        }
+        let mut expected = vec![false; 33];
+        expected[0] = true;
+        assert_eq!(bits.as_slice().iter().collect::<Vec<_>>(), expected);
     }
 
     #[test]
@@ -335,9 +330,7 @@ mod tests {
         let booleans = [true, false, false, true];
         let bits = BitVec::from(booleans.as_slice());
         assert_eq!(bits.len(), 4);
-        for i in 0..booleans.len() {
-            assert_eq!(bits.get(i), Some(booleans[i]));
-        }
+        assert_eq!(bits.as_slice().iter().collect::<Vec<_>>(), booleans);
 
         // Exactly a word
         let mut booleans = Vec::new();
@@ -347,9 +340,7 @@ mod tests {
         booleans[31] = true;
         let bits = BitVec::from(booleans.as_slice());
         assert_eq!(bits.len(), 32);
-        for i in 0..booleans.len() {
-            assert_eq!(bits.get(i), Some(booleans[i]), "bit {}", i);
-        }
+        assert_eq!(bits.as_slice().iter().collect::<Vec<_>>(), booleans);
 
         // Multi-words
         let mut booleans = Vec::new();
@@ -359,9 +350,7 @@ mod tests {
         booleans[32] = true;
         let bits = BitVec::from(booleans.as_slice());
         assert_eq!(bits.len(), 33);
-        for i in 0..booleans.len() {
-            assert_eq!(bits.get(i), Some(booleans[i]));
-        }
+        assert_eq!(bits.as_slice().iter().collect::<Vec<_>>(), booleans);
     }
 
     #[test]
@@ -380,9 +369,7 @@ mod tests {
         bits.drain(range.clone());
         expected.drain(range);
         assert_eq!(bits.len(), expected.len());
-        for i in 0..expected.len() {
-            assert_eq!(bits.get(i), Some(expected[i]));
-        }
+        assert_eq!(bits.as_slice().iter().collect::<Vec<_>>(), expected);
 
         // Drain middle
         let range = 11..17;
@@ -391,18 +378,14 @@ mod tests {
         bits.drain(range.clone());
         expected.drain(range);
         assert_eq!(bits.len(), expected.len());
-        for i in 0..expected.len() {
-            assert_eq!(bits.get(i), Some(expected[i]));
-        }
+        assert_eq!(bits.as_slice().iter().collect::<Vec<_>>(), expected);
 
         // Drain by the end
         let range = (bits.len() - 5)..bits.len();
         bits.drain(range.clone());
         expected.drain(range);
         assert_eq!(bits.len(), expected.len());
-        for i in 0..expected.len() {
-            assert_eq!(bits.get(i), Some(expected[i]));
-        }
+        assert_eq!(bits.as_slice().iter().collect::<Vec<_>>(), expected);
 
         // Drain all
         let range = 0..bits.len();
