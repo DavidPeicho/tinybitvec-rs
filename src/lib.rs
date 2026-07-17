@@ -133,6 +133,13 @@ impl BitVec {
         self.as_mut_slice().set_range(range);
     }
 
+    /// Same as .
+    ///
+    /// Panics if `range` reaches outside allocated storage.
+    pub fn unset_range(&mut self, range: std::ops::Range<usize>) {
+        self.as_mut_slice().unset_range(range);
+    }
+
     /// Sets `index` to `value`.
     ///
     /// Panics if `index` reaches outside allocated storage.

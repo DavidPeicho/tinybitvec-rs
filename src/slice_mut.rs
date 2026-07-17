@@ -16,6 +16,13 @@ impl<'a> SliceMut<'a> {
         self.set_range_to(range, true);
     }
 
+    /// Unsets every bit in `range`.
+    ///
+    /// Panics if `range` reaches outside allocated storage.
+    pub fn unset_range(&mut self, range: std::ops::Range<usize>) {
+        self.set_range_to(range, false);
+    }
+
     /// Clears all bits in this slice.
     #[inline]
     pub fn unset_all(&mut self) {
