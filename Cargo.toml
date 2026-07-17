@@ -2,8 +2,8 @@
 name = "tinybitsvec"
 version = "0.1.0-beta.0"
 edition = "2024"
-description = "Tiny bits vector implementation, backend a u32 storage"
-repository = "https://github.com/DavidPeicho/tinybitvec-rs"
+description = "Tiny bits vector implementation, backed by a u32 storage"
+repository = "https://github.com/DavidPeicho/tinybitsvec-rs"
 license = "MIT OR Apache-2.0"
 readme = "README.md"
 keywords = ["container", "bits"]
