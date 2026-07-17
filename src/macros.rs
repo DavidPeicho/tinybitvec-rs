@@ -30,11 +30,7 @@ macro_rules! impl_index {
             #[inline]
             fn index(&self, index: usize) -> &Self::Output {
                 let value = self.get(index).unwrap();
-                if value {
-                    &true
-                } else {
-                    &false
-                }
+                if value { &true } else { &false }
             }
         }
     };
@@ -51,6 +47,11 @@ macro_rules! impl_slice {
                 } else {
                     None
                 }
+            }
+
+            // Similar to the get, but without bounds check.
+            pub fn get_unsafe(&self, index: usize) -> bool {
+                bit_get!(self.storage, self.range.start + index)
             }
 
             /// Returns the number of bits in the slice.

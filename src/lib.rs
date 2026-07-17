@@ -39,6 +39,9 @@ pub struct BitVec {
 }
 
 impl BitVec {
+    /// Number of bits per storage entry.
+    pub const BITS_PER_WORD: usize = u32::BITS as usize;
+
     /// Creates `size` bits initialized to `value`.
     pub fn new(size: usize, value: bool) -> Self {
         let value = if value { u32::MAX } else { 0 };
@@ -160,7 +163,7 @@ impl BitVec {
         bit_unset!(self.storage, index);
     }
 
-    /// Returns the bit at `index`, or `None` if out of bounds.
+    /// See [`Slice::get`].
     #[inline]
     pub fn get(&self, index: usize) -> Option<bool> {
         if index < self.len {
@@ -168,6 +171,12 @@ impl BitVec {
         } else {
             None
         }
+    }
+
+    /// See [`Slice::get`].
+    #[inline]
+    pub fn get_unsafe(&self, index: usize) -> bool {
+        bit_get!(self.storage, index)
     }
 
     /// Returns the number of bits.
